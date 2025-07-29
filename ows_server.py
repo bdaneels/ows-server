@@ -56,7 +56,8 @@ def get_files_dir(adir):
                 yield entry, fstat
 
 def create_header():
-    menu_items = {'Home': '/sel_script',
+    menu_items = {'Home': '/',
+                  'Select script': '/sel_script',
                   }
     
     with ui.header(elevated=True).style('background-color: #3874c8') \
@@ -80,7 +81,7 @@ def page_sel_script():
     def update_aggrid():
         script_dir = settings['paths']['script']
         if not os.path.exists(script_dir):
-            ui.notify(f'specified script dir {script} does not exist!')
+            ui.notify(f'specified script dir {script_dir} does not exist!')
             return
         grid_line = {}
         _rows.clear()
@@ -171,4 +172,10 @@ def page_run_script(script, fileA, fileB):
     ui.label(f'{fileA}')
     ui.label(f'{fileB}')
     ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
+
+@ui.page('/')
+def page_index():
+    create_header()
+    ui.button('Select a script', on_click=lambda e: ui.navigate.to('/sel_script'))
+
 ui.run(reload=False, host='0.0.0.0')
