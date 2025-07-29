@@ -1,3 +1,5 @@
 scripts/
 uploads/
 *~
+start_srv.sh
+ows.ini
