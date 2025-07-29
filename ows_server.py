@@ -162,7 +162,7 @@ def page_upl_files(sel_script):
 @ui.page('/run_script/{script}/{fileA}/{fileB}')
 def page_run_script(script, fileA, fileB):
 
-    def start_script(script, fileA, fileB):
+    #def start_script(script, fileA, fileB):
         
     
     #UI
@@ -171,4 +171,4 @@ def page_run_script(script, fileA, fileB):
     ui.label(f'{fileA}')
     ui.label(f'{fileB}')
     ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
-ui.run()
+ui.run(reload=False, host='0.0.0.0')
