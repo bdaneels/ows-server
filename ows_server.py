@@ -173,11 +173,15 @@ def page_upl_files(sel_script):
             ui.notify('No rows selected.')
         else:
             ui.notify('you must select 2 files')
+            
+    def file_upload(e):
+        handle_upload(e)
+        update_aggrid()
 
     #UI
     create_header()            
     ui.label(f'{sel_script}')        
-    ui.upload(on_upload=handle_upload).props('accept=*').classes('max-w-full')
+    ui.upload(on_upload=file_upload).props('accept=*').classes('max-w-full')
 
     aggrid = ui.aggrid({
         'columnDefs': columns,
@@ -207,6 +211,12 @@ def page_run_script(script, fileA, fileB):
               f'Standard Error: {stderr.decode()}')
         out.content = f'```\n{stdout.decode()}\n```'
         error.content = f'```\n{stderr.decode()}\n```'
+        if rem_compared_files.value:
+            print("removing compared files...")
+            os.remove(fp_fileA)
+            os.remove(fp_fileB)
+        else:
+            print("nothing to remove")
             
     #UI
     create_header()
@@ -214,6 +224,8 @@ def page_run_script(script, fileA, fileB):
     ui.label(f'{fileA}')
     ui.label(f'{fileB}')
     cmd_lbl = ui.label()
+    rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
+    rem_compared_files.value = True
     ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
     spinner = ui.spinner(size='lg') # .classes('absolute-center')
     spinner.visible = False

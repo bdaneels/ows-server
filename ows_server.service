@@ -1,0 +1,13 @@
+[Unit]
+Description=OWS Web Application Server
+After=network.target
+
+[Service]
+User=ubuntu
+#Group=www-data
+WorkingDirectory=/home/ubuntu/ows-server/
+ExecStart=/usr/bin/python3 ows_server.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
