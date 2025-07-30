@@ -5,9 +5,10 @@ import pandas as pd
 import configparser
 from io import StringIO
 from nicegui import run, ui, app, binding, events
-import pprint
+import asyncio
 import re
 import os
+import socket
 from pprint import pformat
 
 #read a file with configuration settings
@@ -20,7 +21,23 @@ if os.path.exists('ows.ini'):
 else:
     print("no configuration file found (ows.ini)")
     exit
-    
+
+def add_script_path(fname):
+    script_dir = settings['paths']['script']
+    if not os.path.exists(script_dir):
+        ui.notify(f'specified script dir {script_dir} does not exist!')
+        return
+    fname_wpath = os.path.join(script_dir, fname)
+    return fname_wpath
+
+def add_upload_path(fname):
+    upload_dir = settings['paths']['upload']
+    if not os.path.exists(upload_dir):
+        ui.notify(f'specified upload dir {upload_dir} does not exist!')
+        return
+    fname_wpath = os.path.join(upload_dir, fname)
+    return fname_wpath
+
 def handle_upload(e: events.UploadEventArguments):
     print('handle upload')
     upload_dir = settings['paths']['upload']
@@ -55,6 +72,17 @@ def get_files_dir(adir):
                 print(fstat.st_size)
                 yield entry, fstat
 
+
+async def run_subprocess(cmd):
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+
+    stdout, stderr = await process.communicate()
+    return stdout, stderr
+                
 def create_header():
     menu_items = {'Home': '/',
                   'Select script': '/sel_script',
@@ -163,19 +191,51 @@ def page_upl_files(sel_script):
 @ui.page('/run_script/{script}/{fileA}/{fileB}')
 def page_run_script(script, fileA, fileB):
 
-    #def start_script(script, fileA, fileB):
-        
-    
+    async def start_script(script, fileA, fileB):
+        fp_script = add_script_path(script)
+        fp_fileA = add_upload_path(fileA)
+        fp_fileB = add_upload_path(fileB)
+
+        #check if all files exist
+        cmd = ['python', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', 'out.csv']
+        print(f"command -> {cmd}")
+        cmd_lbl.text = f"{cmd}"
+        spinner.set_visibility(True)
+        stdout, stderr = await run_subprocess(cmd)
+        spinner.set_visibility(False)
+        print(f'Standard Output: {stdout.decode()}',
+              f'Standard Error: {stderr.decode()}')
+        out.content = f'```\n{stdout.decode()}\n```'
+        error.content = f'```\n{stderr.decode()}\n```'
+            
     #UI
     create_header()
     ui.label(f'{script}')
     ui.label(f'{fileA}')
     ui.label(f'{fileB}')
+    cmd_lbl = ui.label()
     ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
+    spinner = ui.spinner(size='lg') # .classes('absolute-center')
+    spinner.visible = False
+    ui.label('stderr')
+    with ui.card() as err_card:       
+        error = ui.markdown()
+    ui.label('stdout')
+    with ui.card() as out_card:
+        out = ui.markdown()
 
 @ui.page('/')
 def page_index():
     create_header()
+    ui.html('Some explanation or communication for <strong>users</strong>')
     ui.button('Select a script', on_click=lambda e: ui.navigate.to('/sel_script'))
 
-ui.run(reload=False, host='0.0.0.0')
+hostname = settings['general']['hostname']
+sock_hostname = socket.gethostname()
+if sock_hostname == hostname:
+    print("running on the server...")
+    ui.run(reload=False, host='0.0.0.0')
+else:
+    print("running locally...")
+    ui.run()    
+

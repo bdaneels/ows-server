@@ -31,3 +31,6 @@ deb:
 opr:
 	jinja  -D mode "$(MODE_OPER)" -o start_srv.sh start_srv.sh.j2
 	chmod +x start_srv.sh
+tests:
+	cp test/merge_csvs.py scripts/
+	cp test/*.csv uploads/
