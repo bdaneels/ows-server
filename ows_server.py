@@ -197,7 +197,7 @@ def page_run_script(script, fileA, fileB):
         fp_fileB = add_upload_path(fileB)
 
         #check if all files exist
-        cmd = ['python', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', 'out.csv']
+        cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', 'out.csv']
         print(f"command -> {cmd}")
         cmd_lbl.text = f"{cmd}"
         spinner.set_visibility(True)
