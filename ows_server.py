@@ -9,6 +9,7 @@ import asyncio
 import re
 import os
 import socket
+import datetime
 from pprint import pformat
 
 #read a file with configuration settings
@@ -36,6 +37,14 @@ def add_upload_path(fname):
         ui.notify(f'specified upload dir {upload_dir} does not exist!')
         return
     fname_wpath = os.path.join(upload_dir, fname)
+    return fname_wpath
+
+def add_output_path(fname):
+    output_dir = settings['paths']['out']
+    if not os.path.exists(output_dir):
+        ui.notify(f'specified output dir {output_dir} does not exist!')
+        return
+    fname_wpath = os.path.join(output_dir, fname)
     return fname_wpath
 
 def handle_upload(e: events.UploadEventArguments):
@@ -195,17 +204,28 @@ def page_upl_files(sel_script):
 @ui.page('/run_script/{script}/{fileA}/{fileB}')
 def page_run_script(script, fileA, fileB):
 
+    class CScript:
+        def __init__(self):
+            self.fileOut = ''
+            self.button_enabled = False
+    
     async def start_script(script, fileA, fileB):
+        timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
+        fn_out = f'{timestamp}_.csv'
         fp_script = add_script_path(script)
         fp_fileA = add_upload_path(fileA)
         fp_fileB = add_upload_path(fileB)
+        fp_out = add_output_path(fn_out)
 
         #check if all files exist
-        cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', 'out.csv']
+        
+        cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', f'{fp_out}']
         print(f"command -> {cmd}")
         cmd_lbl.text = f"{cmd}"
         spinner.set_visibility(True)
         stdout, stderr = await run_subprocess(cmd)
+        cscript.fileOut = fp_out
+        cscript.button_enabled = True
         spinner.set_visibility(False)
         print(f'Standard Output: {stdout.decode()}',
               f'Standard Error: {stderr.decode()}')
@@ -219,16 +239,24 @@ def page_run_script(script, fileA, fileB):
             print("nothing to remove")
             
     #UI
+    cscript = CScript()
+    print(f'{cscript.fileOut}')
+    print(f'{cscript.button_enabled}')
     create_header()
-    ui.label(f'{script}')
-    ui.label(f'{fileA}')
-    ui.label(f'{fileB}')
+    ui.label(f'script -> {script}')
+    ui.label(f'file 1 -> {fileA}')
+    ui.label(f'file 2 -> {fileB}')
+    ui.label().bind_text_from(cscript, 'fileOut',
+                              backward=lambda text: f'output file -> {text}')
     cmd_lbl = ui.label()
     rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
     rem_compared_files.value = True
     ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
     spinner = ui.spinner(size='lg') # .classes('absolute-center')
     spinner.visible = False
+    d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
+    print(f'{cscript.fileOut}')
+    d.bind_enabled_from(cscript, 'button_enabled')
     ui.label('stderr')
     with ui.card() as err_card:       
         error = ui.markdown()

@@ -1,5 +1,6 @@
 scripts/
 uploads/
+out/
 *~
 start_srv.sh
 ows.ini

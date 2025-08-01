@@ -14,7 +14,7 @@ UPLOAD_DIR := uploads
 SCRIPT_DIR := scripts
 DIRS := $(UPLOAD_DIR) $(SCRIPT_DIR)
 
-home: $(dirs) ini deb
+home: $(DIRS) ini deb
 server: $(dirs) ini opr
 
 .PHONY: Makefile
