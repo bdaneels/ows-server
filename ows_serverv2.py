@@ -19,6 +19,7 @@ settings = configparser.ConfigParser()
 settings._interpolation = configparser.ExtendedInterpolation()
 if os.path.exists('ows.ini'):
     settings.read_file(open('ows.ini'))
+    print(f"{settings}")
 else:
     print("no configuration file found (ows.ini)")
     exit
@@ -111,10 +112,17 @@ def page_sel_script():
     #UI         
     create_header()
     for key in settings['scripts']:
+        print(f"processing {key}")
         with ui.card():
-            ui.label(f'{key}')
-            ui.button(f'{key}')
-    ui.button('Next',on_click=ui.notify('go to net page'))    
+            ui.notify(f'{key}')
+            if key in settings['comment']:
+                text = settings.get('comment', key)
+                ui.markdown(f"{text}")
+            link = f'/upl_files/sel_script={key}'
+            print(f'link for key {key} -> {link}')
+            ui.button(f'{key}', on_click=lambda e: ui.notify(link)). \
+                tooltip(link)
+        
 
     
 @ui.page('/upl_files/{sel_script}')
@@ -238,7 +246,8 @@ def page_run_script(script, fileA, fileB):
 @ui.page('/')
 def page_index():
     create_header()
-    ui.html('Some explanation or communication for <strong>users</strong>')
+    if 'index_page' in settings['general']:
+        ui.html(f"{settings['general']['index_page']}")
     ui.button('Select a script', on_click=lambda e: ui.navigate.to('/sel_script'))
 
 hostname = settings['general']['hostname']

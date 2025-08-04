@@ -7,7 +7,12 @@ out = ${home}/out
 [general]
 debug = False
 hostname = ows-server
+index_page = This comment will be on the first page
 
 [scripts]
 test = ${paths:script}/merge_csvs.py
 startpaketten = ${paths:script}/stp/script.py
+
+[comment]
+test = Dit script gaat 2 csv's samenvoegen. Het resultaat kan orden gedownload.
+startpaketten = 2 xlsx worden vergeleken
