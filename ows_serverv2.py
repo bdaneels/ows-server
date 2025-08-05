@@ -28,7 +28,7 @@ def add_script_path(fname):
     script_dir = settings['paths']['script']
     if not os.path.exists(script_dir):
         ui.notify(f'specified script dir {script_dir} does not exist!')
-        return
+        return None
     fname_wpath = os.path.join(script_dir, fname)
     return fname_wpath
 
@@ -36,8 +36,11 @@ def add_upload_path(fname):
     upload_dir = settings['paths']['upload']
     if not os.path.exists(upload_dir):
         ui.notify(f'specified upload dir {upload_dir} does not exist!')
-        return
+        return None
     fname_wpath = os.path.join(upload_dir, fname)
+    if not os.path.exists(fname_wpath):
+        ui.notify(f'specified file {fname_wpath} does not exist!')
+        return None
     return fname_wpath
 
 def add_output_path(fname):
@@ -108,20 +111,17 @@ def create_header():
 @ui.page('/sel_script')
 def page_sel_script():
   
-
     #UI         
     create_header()
     for key in settings['scripts']:
-        print(f"processing {key}")
         with ui.card():
-            ui.notify(f'{key}')
             if key in settings['comment']:
                 text = settings.get('comment', key)
                 ui.markdown(f"{text}")
-            link = f'/upl_files/sel_script={key}'
-            print(f'link for key {key} -> {link}')
-            ui.button(f'{key}', on_click=lambda e: ui.notify(link)). \
-                tooltip(link)
+            link = f'/upl_files/{key}'
+            #be carefull here, assign the variable link to an argument, otherwise
+            #the link value will be the last value it has after the loop
+            ui.button(f'{key}', on_click=lambda link=link: ui.navigate.to(link))
         
 
     
@@ -164,18 +164,28 @@ def page_upl_files(sel_script):
             
     def file_upload(e):
         handle_upload(e)
-        update_aggrid()
+
+    def file_rejected(e):        
+        ui.notify(f'file has been rejected (size)')
 
     #UI
     create_header()            
     ui.label(f'{sel_script}')        
-    ui.upload(on_upload=file_upload).props('accept=*').classes('max-w-full')
+    ui.upload(on_upload=file_upload,
+              max_file_size = settings['uploader']['max_file_size'],
+              max_files = settings['uploader']['max_files'],
+              label = settings['uploader']['label'],
+              on_multi_upload = update_aggrid,
+              on_rejected = file_rejected,
+              multiple= True).props('accept=*').classes('max-w-full')
 
-    aggrid = ui.aggrid({
-        'columnDefs': columns,
-        'rowData': rows,
-        'rowSelection': 'multiple',       
-    })
+    with ui.card():
+        ui.label('Select the files you want to compare')
+        aggrid = ui.aggrid({
+            'columnDefs': columns,
+            'rowData': rows,
+            'rowSelection': 'multiple',       
+        })
     #ui.button('Refresh', on_click=update_aggrid)
     ui.button('Next',on_click=get_selected_rows)
     update_aggrid()
@@ -187,13 +197,17 @@ def page_run_script(script, fileA, fileB):
         def __init__(self):
             self.fileOut = ''
             self.button_enabled = False
-    
-    async def start_script(script, fileA, fileB):
+            
+    def get_check_path_script(script):
+        fpath = settings['scripts'][script]
+        if not os.path.exists(fpath):
+            ui.notify(f'script full name {fpath}  not found!')
+            return None
+        return fpath
+        
+    async def start_script(fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         fn_out = f'{timestamp}_.csv'
-        fp_script = add_script_path(script)
-        fp_fileA = add_upload_path(fileA)
-        fp_fileB = add_upload_path(fileB)
         fp_out = add_output_path(fn_out)
 
         #check if all files exist
@@ -222,26 +236,37 @@ def page_run_script(script, fileA, fileB):
     print(f'{cscript.fileOut}')
     print(f'{cscript.button_enabled}')
     create_header()
-    ui.label(f'script -> {script}')
-    ui.label(f'file 1 -> {fileA}')
-    ui.label(f'file 2 -> {fileB}')
+    #here we get the real script name, and check if it exists
+    fp_script = get_check_path_script(script)
+    ui.label(f'script -> {fp_script}')
+    #and we add paths to the selected files
+    fp_fileA =  add_upload_path(fileA)
+    ui.label(f'fp_file 1 -> {fp_fileA}')
+    fp_fileB = add_upload_path(fileB)
+    ui.label(f'fp_file 2 -> {fp_fileB}')
     ui.label().bind_text_from(cscript, 'fileOut',
                               backward=lambda text: f'output file -> {text}')
     cmd_lbl = ui.label()
-    rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
-    rem_compared_files.value = True
-    ui.button('Start script', on_click=lambda e: start_script(script, fileA, fileB))
-    spinner = ui.spinner(size='lg') # .classes('absolute-center')
-    spinner.visible = False
-    d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
-    print(f'{cscript.fileOut}')
-    d.bind_enabled_from(cscript, 'button_enabled')
-    ui.label('stderr')
-    with ui.card() as err_card:       
-        error = ui.markdown()
-    ui.label('stdout')
-    with ui.card() as out_card:
-        out = ui.markdown()
+    #check if all files exist!
+    if fp_script and fp_fileA and fp_fileB:
+        rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
+        rem_compared_files.value = True
+        ui.button('Start script', on_click=lambda e: \
+                  start_script(fp_script, fp_fileA, fp_fileB))
+        spinner = ui.spinner(size='lg') # .classes('absolute-center')
+        spinner.visible = False
+        d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
+        print(f'{cscript.fileOut}')
+        d.bind_enabled_from(cscript, 'button_enabled')
+        ui.label('stderr')
+        with ui.card() as err_card:       
+            error = ui.markdown()
+        ui.label('stdout')
+        with ui.card() as out_card:
+            out = ui.markdown()
+    else:
+        ui.notify('one of the specified files does not exist. Cannot continue!')
+        ui.label('one of the specified files does not exist. Cannot continue!')
 
 @ui.page('/')
 def page_index():

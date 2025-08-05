@@ -9,10 +9,17 @@ debug = False
 hostname = ows-server
 index_page = This comment will be on the first page
 
+[uploader]
+max_file_size = 1024^2 # this is 1 MB
+max_files = 2
+label = Upload 2 files you want to compare
+
 [scripts]
 test = ${paths:script}/merge_csvs.py
 startpaketten = ${paths:script}/stp/script.py
+test2 =  ${paths:script}/tst/merge_csvs_pandas.py
 
 [comment]
 test = Dit script gaat 2 csv's samenvoegen. Het resultaat kan orden gedownload.
 startpaketten = 2 xlsx worden vergeleken
+test2 = zelfde als test, maar dan met de pandas library

@@ -33,4 +33,6 @@ opr:
 	chmod +x start_srv.sh
 tests:
 	cp test/merge_csvs.py scripts/
+	cp test/merge_csvs_pandas.py scripts/tst/
+	cp test/merge_csvs_pandas_args.py scripts/tst/
 	cp test/*.csv uploads/
