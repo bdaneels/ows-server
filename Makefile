@@ -32,7 +32,7 @@ opr:
 	jinja  -D mode "$(MODE_OPER)" -o start_srv.sh start_srv.sh.j2
 	chmod +x start_srv.sh
 tests:
-	cp test/merge_csvs.py scripts/
+	cp test/merge_csvs.py scripts/tst/
 	cp test/merge_csvs_pandas.py scripts/tst/
 	cp test/merge_csvs_pandas_args.py scripts/tst/
 	cp test/*.csv uploads/
