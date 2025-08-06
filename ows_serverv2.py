@@ -10,6 +10,7 @@ import re
 import os
 import socket
 import datetime
+import pprint
 from pprint import pformat
 
 #read a file with configuration settings
@@ -99,11 +100,12 @@ async def run_subprocess(cmd):
 def create_header():
     menu_items = {'Home': '/',
                   'Select script': '/sel_script',
+                  'Download files':'/dwl_files',
                   }
-    
     with ui.header(elevated=True).style('background-color: #3874c8') \
                                  .classes('items-center justify-between'):
-        ui.label('OWS')
+        ui.label(f"{settings['general']['header_label']}")
+        ui.label().bind_text_from(app.storage.user, 'user')
         with ui.row().classes('max-[1050px]:hidden'):
             for title_, target in menu_items.items():
                 ui.link(title_, target).classes(replace='text-lg text-white')
@@ -120,7 +122,7 @@ def page_sel_script():
                 ui.markdown(f"{text}")
             link = f'/upl_files/{key}'
             #be carefull here, assign the variable link to an argument, otherwise
-            #the link value will be the last value it has after the loop
+            #the link value will be the last value it has after the loop 
             ui.button(f'{key}', on_click=lambda link=link: ui.navigate.to(link))
         
 
@@ -190,6 +192,61 @@ def page_upl_files(sel_script):
     ui.button('Next',on_click=get_selected_rows)
     update_aggrid()
 
+@ui.page('/dwl_files')
+def page_dwl_files():
+    columns = [
+        {'field': 'filename', 'checkboxSelection': True,
+         'editable': False, 'sortable': True},
+        {'field': 'size', 'editable': False, 'sortable' : True},
+    ]
+    
+    rows = [
+    ]
+    
+    def update_aggrid():
+        grid_line = {}
+        out_dir = settings['paths']['out']
+        if not os.path.exists(out_dir):
+            ui.notify(f'specified out dir {out_dir} does not exist!')
+            return
+        rows.clear()
+        for fentry, fstat in get_files_dir(out_dir):
+            grid_line = {'filename':fentry.name, 'size':fstat.st_size}
+            print(f"{grid_line}")
+            rows.append(grid_line)
+        aggrid.update()
+
+    async def get_selected_rows(e):
+        pprint.pp(e.sender.text)        
+        files = []
+        sel_rows = await aggrid.get_selected_rows()
+        if len(sel_rows) > 0:
+            for row in sel_rows:
+                ui.notify(f"{row['filename']}")
+                fname = add_output_path(row['filename'])
+                if e.sender.text == 'Download':
+                    ui.download.file(fname)
+                elif e.sender.text == 'Delete':
+                    os.remove(fname)
+            update_aggrid()
+        elif len(sel_rows) == 0:
+            ui.notify('No rows selected.')
+                
+    #UI
+    create_header()            
+    ui.button('Select all', on_click=lambda: aggrid.run_grid_method('selectAll'))
+    with ui.card():
+        ui.label('Select the files you want to download or delete')
+        aggrid = ui.aggrid({
+            'columnDefs': columns,
+            'rowData': rows,
+            'rowSelection': 'multiple',       
+        })
+    ui.button('Download', on_click=get_selected_rows)
+    ui.button('Delete', on_click=get_selected_rows)
+    update_aggrid()
+
+    
 @ui.page('/run_script/{script}/{fileA}/{fileB}')
 def page_run_script(script, fileA, fileB):
 
@@ -207,7 +264,8 @@ def page_run_script(script, fileA, fileB):
         
     async def start_script(fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
-        fn_out = f'{timestamp}_.csv'
+        user =  app.storage.user['user']
+        fn_out = f'{user}_{timestamp}.csv'
         fp_out = add_output_path(fn_out)
 
         #check if all files exist
@@ -268,19 +326,30 @@ def page_run_script(script, fileA, fileB):
         ui.notify('one of the specified files does not exist. Cannot continue!')
         ui.label('one of the specified files does not exist. Cannot continue!')
 
+
+def store_user(value):
+    ui.notify(f'saving user {value}')
+    app.storage.user['user'] = value
+        
 @ui.page('/')
 def page_index():
     create_header()
     if 'index_page' in settings['general']:
         ui.html(f"{settings['general']['index_page']}")
+    if 'users' in settings['general']:
+        users = settings['general']['users'].split(',')
+    print(f'{users}')
+    user = app.storage.user['user']    
+    ui.select(options=users, with_input=True, label='select user', value = user,
+              on_change=lambda e: store_user(e.value)).classes('w-40')
     ui.button('Select a script', on_click=lambda e: ui.navigate.to('/sel_script'))
 
 hostname = settings['general']['hostname']
 sock_hostname = socket.gethostname()
 if sock_hostname == hostname:
     print("running on the server...")
-    ui.run(reload=False, host='0.0.0.0')
+    ui.run(reload=False, host='0.0.0.0', storage_secret=settings['general']['storage_secret'])
 else:
     print("running locally...")
-    ui.run()    
+    ui.run(storage_secret=settings['general']['storage_secret'])    
 
