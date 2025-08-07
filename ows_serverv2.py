@@ -1,4 +1,4 @@
-# -*- mode: python; indent-tabs-mode: nil; python-indent-offset: 4 -*-
+#-*- mode: python; indent-tabs-mode: nil; python-indent-offset: 4 -*-
 import sys
 import argparse
 import pandas as pd
@@ -12,6 +12,7 @@ import socket
 import datetime
 import pprint
 from pprint import pformat
+from ows_logger import setup_logger
 
 #read a file with configuration settings
 #settings are in compare_it.ini file
@@ -24,7 +25,9 @@ if os.path.exists('ows.ini'):
 else:
     print("no configuration file found (ows.ini)")
     exit
-
+    
+log = setup_logger("ows-server", debug=settings['general']['debug'])
+    
 def add_script_path(fname):
     script_dir = settings['paths']['script']
     if not os.path.exists(script_dir):
@@ -53,7 +56,7 @@ def add_output_path(fname):
     return fname_wpath
 
 def handle_upload(e: events.UploadEventArguments):
-    print('handle upload')
+    log.info('handle upload')
     upload_dir = settings['paths']['upload']
     if not os.path.exists(upload_dir):
         ui.notify(f'specified upload dir {upload_dir} does not exist!')
@@ -61,7 +64,7 @@ def handle_upload(e: events.UploadEventArguments):
     #pprint.pp(e)
     fname = e.name
     ftype = e.type
-    print(f'uploaded file name -> {fname} type {ftype}')
+    log.debug(f'uploaded file name -> {fname} type {ftype}')
     #allow csv or xlsx files only
     if re.search('csv', ftype):
         text = e.content.read().decode('utf-8')
@@ -81,9 +84,9 @@ def get_files_dir(adir):
     with os.scandir(adir) as it:
         for entry in it:
             if not entry.name.startswith('.') and entry.is_file():
-                print(entry.name)
+                #log.debug(entry.name)
                 fstat = entry.stat()
-                print(fstat.st_size)
+                #log.debug(fstat.st_size)
                 yield entry, fstat
 
 
@@ -112,6 +115,10 @@ def create_header():
                 
 @ui.page('/sel_script')
 def page_sel_script():
+
+    def save_and_next(key):
+        app.storage.user['script'] = key
+        ui.navigate.to('/upl_files')
   
     #UI         
     create_header()
@@ -120,15 +127,14 @@ def page_sel_script():
             if key in settings['comment']:
                 text = settings.get('comment', key)
                 ui.markdown(f"{text}")
-            link = f'/upl_files/{key}'
             #be carefull here, assign the variable link to an argument, otherwise
             #the link value will be the last value it has after the loop 
-            ui.button(f'{key}', on_click=lambda link=link: ui.navigate.to(link))
+            ui.button(f'{key}', on_click=lambda key=key: save_and_next(key))
         
 
     
-@ui.page('/upl_files/{sel_script}')
-def page_upl_files(sel_script):
+@ui.page('/upl_files')
+def page_upl_files():
     columns = [
         {'field': 'filename', 'checkboxSelection': True,
          'editable': False, 'sortable': True},
@@ -147,18 +153,20 @@ def page_upl_files(sel_script):
         rows.clear()
         for fentry, fstat in get_files_dir(upload_dir):
             grid_line = {'filename':fentry.name, 'size':fstat.st_size}
-            print(f"{grid_line}")
+            #print(f"{grid_line}")
             rows.append(grid_line)
         aggrid.update()
 
     async def get_selected_rows():
+        #log.debug('in get_selected_rows')
         files = []
         sel_rows = await aggrid.get_selected_rows()
         if len(sel_rows) == 2:
             for row in sel_rows:
-                ui.notify(f"{row['filename']}")
+                ui.notify(f"{row['filename']}")                
                 files.append(row['filename'])
-            ui.navigate.to(f'/run_script/{sel_script}/{files[0]}/{files[1]}/')
+            app.storage.user['files'] = files
+            ui.navigate.to('/run_script')
         elif len(sel_rows) == 0:
             ui.notify('No rows selected.')
         else:
@@ -172,7 +180,7 @@ def page_upl_files(sel_script):
 
     #UI
     create_header()            
-    ui.label(f'{sel_script}')        
+    ui.label(f"{app.storage.user['script']}")        
     ui.upload(on_upload=file_upload,
               max_file_size = settings['uploader']['max_file_size'],
               max_files = settings['uploader']['max_files'],
@@ -182,14 +190,14 @@ def page_upl_files(sel_script):
               multiple= True).props('accept=*').classes('max-w-full')
 
     with ui.card():
-        ui.label('Select the files you want to compare')
+        ui.label('Select the 2 files you want to compare')
         aggrid = ui.aggrid({
             'columnDefs': columns,
             'rowData': rows,
             'rowSelection': 'multiple',       
         })
-    #ui.button('Refresh', on_click=update_aggrid)
-    ui.button('Next',on_click=get_selected_rows)
+    btn = ui.button('Next',on_click=get_selected_rows)
+    #btn.enabled = False
     update_aggrid()
 
 @ui.page('/dwl_files')
@@ -217,7 +225,7 @@ def page_dwl_files():
         aggrid.update()
 
     async def get_selected_rows(e):
-        pprint.pp(e.sender.text)        
+        #pprint.pp(e.sender.text)        
         files = []
         sel_rows = await aggrid.get_selected_rows()
         if len(sel_rows) > 0:
@@ -247,8 +255,8 @@ def page_dwl_files():
     update_aggrid()
 
     
-@ui.page('/run_script/{script}/{fileA}/{fileB}')
-def page_run_script(script, fileA, fileB):
+@ui.page('/run_script')
+def page_run_script():
 
     class CScript:
         def __init__(self):
@@ -271,29 +279,33 @@ def page_run_script(script, fileA, fileB):
         #check if all files exist
         
         cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', f'{fp_out}']
-        print(f"command -> {cmd}")
+        log.debug(f"command -> {cmd}")
         cmd_lbl.text = f"{cmd}"
         spinner.set_visibility(True)
         stdout, stderr = await run_subprocess(cmd)
         cscript.fileOut = fp_out
         cscript.button_enabled = True
         spinner.set_visibility(False)
-        print(f'Standard Output: {stdout.decode()}',
-              f'Standard Error: {stderr.decode()}')
+        log.debug(f'Standard Output: {stdout.decode()}')
+        log.debug(f'Standard Error: {stderr.decode()}')
         out.content = f'```\n{stdout.decode()}\n```'
         error.content = f'```\n{stderr.decode()}\n```'
         if rem_compared_files.value:
-            print("removing compared files...")
+            log.debug("removing compared files...")
             os.remove(fp_fileA)
             os.remove(fp_fileB)
         else:
-            print("nothing to remove")
+            log.debug("nothing to remove")
             
     #UI
     cscript = CScript()
-    print(f'{cscript.fileOut}')
-    print(f'{cscript.button_enabled}')
+    log.debug(f'{cscript.fileOut}')
+    log.debug(f'{cscript.button_enabled}')
     create_header()
+    #get the selected parameters from storage
+    script = app.storage.user['script']
+    fileA =  app.storage.user['files'][0]
+    fileB =  app.storage.user['files'][1]
     #here we get the real script name, and check if it exists
     fp_script = get_check_path_script(script)
     ui.label(f'script -> {fp_script}')
@@ -314,7 +326,6 @@ def page_run_script(script, fileA, fileB):
         spinner = ui.spinner(size='lg') # .classes('absolute-center')
         spinner.visible = False
         d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
-        print(f'{cscript.fileOut}')
         d.bind_enabled_from(cscript, 'button_enabled')
         ui.label('stderr')
         with ui.card() as err_card:       
@@ -333,13 +344,16 @@ def store_user(value):
         
 @ui.page('/')
 def page_index():
+    user = None
     create_header()
     if 'index_page' in settings['general']:
         ui.html(f"{settings['general']['index_page']}")
     if 'users' in settings['general']:
         users = settings['general']['users'].split(',')
-    print(f'{users}')
-    user = app.storage.user['user']    
+    log.debug(f'{users}')
+    if 'user' in app.storage.user:
+        user = app.storage.user['user']
+        log.debug(f'user {user} is in app.storage.user')
     ui.select(options=users, with_input=True, label='select user', value = user,
               on_change=lambda e: store_user(e.value)).classes('w-40')
     ui.button('Select a script', on_click=lambda e: ui.navigate.to('/sel_script'))
@@ -347,9 +361,9 @@ def page_index():
 hostname = settings['general']['hostname']
 sock_hostname = socket.gethostname()
 if sock_hostname == hostname:
-    print("running on the server...")
+    log.info("running on the server...")
     ui.run(reload=False, host='0.0.0.0', storage_secret=settings['general']['storage_secret'])
 else:
-    print("running locally...")
+    log.debug("running locally...")
     ui.run(storage_secret=settings['general']['storage_secret'])    
 
