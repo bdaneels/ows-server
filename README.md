@@ -40,8 +40,8 @@ Depending on where you are running the application (server or home), run the Mak
 	 or
 	 > make server
 
-This will create the directories needed (uploads, script andout), create a correct ows.ini file. and generate a startup script, which is handy for debugging.
-The file **ows-server.service** should be placed under **/etc/systemd/system**, so that the **ows-server** cab be started, sopped and restarted if needed ::
+This will create the directories needed (uploads, script andout), create a correct **ows.ini** file. and generate a startup script, which is handy for debugging.
+The file **ows-server.service** should be placed under **/etc/systemd/system**, so that the **ows-server** can be started, stopped and restarted if needed (root user)::
 
     	 #service ows_server start
 	 or
@@ -50,5 +50,3 @@ The file **ows-server.service** should be placed under **/etc/systemd/system**, 
 	 #service ows_server restart
 	 or
 	 #service ows_server status
-
-These last commands can only be executed as root.
