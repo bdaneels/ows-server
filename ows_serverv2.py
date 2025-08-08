@@ -103,6 +103,7 @@ async def run_subprocess(cmd):
 def create_header():
     menu_items = {'Home': '/',
                   'Select script': '/sel_script',
+                  'Upload files': '/upl_files',
                   'Download files':'/dwl_files',
                   }
     with ui.header(elevated=True).style('background-color: #3874c8') \
@@ -270,7 +271,7 @@ def page_run_script():
             return None
         return fpath
         
-    async def start_script(fp_script, fp_fileA, fp_fileB):
+    async def start_script(script, fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         user =  app.storage.user['user']
         fn_out = f'{user}_{timestamp}.csv'
@@ -279,6 +280,8 @@ def page_run_script():
         #check if all files exist
         
         cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', f'{fp_out}']
+        if settings['general']['debug']:
+            cmd += ['--verbose']
         log.debug(f"command -> {cmd}")
         cmd_lbl.text = f"{cmd}"
         spinner.set_visibility(True)
@@ -322,7 +325,7 @@ def page_run_script():
         rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
         rem_compared_files.value = True
         ui.button('Start script', on_click=lambda e: \
-                  start_script(fp_script, fp_fileA, fp_fileB))
+                  start_script(script, fp_script, fp_fileA, fp_fileB))
         spinner = ui.spinner(size='lg') # .classes('absolute-center')
         spinner.visible = False
         d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
