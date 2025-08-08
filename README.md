@@ -11,6 +11,7 @@ Requirements
 Configuration
 =============
 **ows.ini.j2** is an ini configuration file, which will be converted to **ows.ini** via a Makefile. Path specific parameters and some others will be different based on where the service is running (**server** or **home**). We will explain each section herafter.
+
 paths
 -----
 specify different paths for the application, **home** is where the application resides (and will be executed). A Makefile will automatically fill this in. **upload** is where the uploaded files will end up, **script** is the directory where different scripts or script directories will remain. **out** is the map where the output of the script will be generated.
@@ -25,8 +26,29 @@ This is the file uploader used by **NiceGUI**. You can soecify the **max_file_si
 
 scripts
 -------
-
+the keys are short (without any spaces,special characters in it). The values refer to the path of the script. You can specify the script path as a variable ( ${paths:script} ), with is under the secion paths. If the script is in a subdirectory of the scripts path, just add this subdirectory to the path.
 
 comment
 -------
+this comment applies to the scripts in the above paragraph. It will appear in space above the button, associated with the script. It is meant as an small explanation for the script.The text can have markdown markup.
 
+installation
+============
+Depending on where you are running the application (server or home), run the Makefile like this::
+
+	 > make home
+	 or
+	 > make server
+
+This will create the directories needed (uploads, script andout), create a correct ows.ini file. and generate a startup script, which is handy for debugging.
+The file **ows-server.service** should be placed under **/etc/systemd/system**, so that the **ows-server** cab be started, sopped and restarted if needed ::
+
+    	 #service ows_server start
+	 or
+	 #service ows_server stop
+	 or
+	 #service ows_server restart
+	 or
+	 #service ows_server status
+
+These last commands can only be executed as root.
