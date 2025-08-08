@@ -27,7 +27,11 @@ else:
     exit
     
 log = setup_logger("ows-server", debug=settings['general']['debug'])
-    
+
+def safe_eval(expr):
+    allowed = {'__builtins__': None}
+    return eval(expr, allowed, {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3})
+
 def add_script_path(fname):
     script_dir = settings['paths']['script']
     if not os.path.exists(script_dir):
@@ -180,10 +184,12 @@ def page_upl_files():
         ui.notify(f'file has been rejected (size)')
 
     #UI
-    create_header()            
+    bytes = safe_eval(settings['uploader']['max_file_size'])
+    create_header()
+    log.debug(f"max_file_size for uploads-> {bytes} bytes")
     ui.label(f"{app.storage.user['script']}")        
     ui.upload(on_upload=file_upload,
-              max_file_size = settings['uploader']['max_file_size'],
+              max_file_size = safe_eval(settings['uploader']['max_file_size']),
               max_files = settings['uploader']['max_files'],
               label = settings['uploader']['label'],
               on_multi_upload = update_aggrid,
@@ -233,9 +239,9 @@ def page_dwl_files():
             for row in sel_rows:
                 ui.notify(f"{row['filename']}")
                 fname = add_output_path(row['filename'])
-                if e.sender.text == 'Download':
+                if e.sender.text == settings['general']['download_lbl']:
                     ui.download.file(fname)
-                elif e.sender.text == 'Delete':
+                elif e.sender.text == settings['general']['delete_lbl']:
                     os.remove(fname)
             update_aggrid()
         elif len(sel_rows) == 0:
@@ -251,8 +257,8 @@ def page_dwl_files():
             'rowData': rows,
             'rowSelection': 'multiple',       
         })
-    ui.button('Download', on_click=get_selected_rows)
-    ui.button('Delete', on_click=get_selected_rows)
+    ui.button(settings['general']['download_lbl'], on_click=get_selected_rows)
+    ui.button(settings['general']['delete_lbl'], on_click=get_selected_rows)
     update_aggrid()
 
     
@@ -350,7 +356,7 @@ def page_index():
     user = None
     create_header()
     if 'index_page' in settings['general']:
-        ui.html(f"{settings['general']['index_page']}")
+        ui.markdown(f"{settings['general']['index_page']}")
     if 'users' in settings['general']:
         users = settings['general']['users'].split(',')
     log.debug(f'{users}')
