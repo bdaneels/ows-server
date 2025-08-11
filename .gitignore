@@ -1,6 +1,8 @@
 scripts/
 uploads/
 out/
+.nicegui/
+__pycache__/
 *~
 start_srv.sh
 ows.ini

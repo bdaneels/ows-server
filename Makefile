@@ -9,6 +9,8 @@ MODE_OPER := > /dev/null 2>&1
 DIRS=uploads scripts/tst out
 UPLOAD_DIR := uploads
 SCRIPT_DIR := scripts
+SERVICE = ows_server.service
+SYSTEMD_DIR = /etc/systemd/system
 
 ifeq ($(MAKECMDGOALS),home)
 	DEBUG = True
@@ -21,7 +23,7 @@ endif
 home: dirs deb ini
 server: dirs opr ini
 
-.PHONY: Makefile dirs
+.PHONY: Makefile dirs tests install
 
 dirs:
 	mkdir -p $(DIRS)
@@ -41,3 +43,11 @@ tests:
 	cp test/merge_csvs_pandas.py scripts/tst/
 	cp test/merge_csvs_pandas_args.py scripts/tst/
 	cp test/*.csv uploads/
+
+install:
+	@echo "Installing $(SERVICE) to $(SYSTEMD_DIR)..."
+	install -m 644 $(SERVICE) $(SYSTEMD_DIR)/
+	@echo "Reloading systemd daemon..."
+	systemctl daemon-reload
+	@echo "Enabling and starting $(SERVICE)..."
+	systemctl enable --now $(SERVICE)
