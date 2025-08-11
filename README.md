@@ -57,52 +57,52 @@ install
 -------
 the file **ows_server.service** is a systemd startup file, it can be installed with the Makefile command ::
 
-    #sudo su
-    -> type password
-    #make install
+    	 #sudo su
+	 -> type password
+	 #make install
 
 This can only be done as root!
 
 startup
 -------
-To start the service, you just need to use the classical **service** commands, e.g::
+To start the service, you just need to use the classical **service** commands, e.g ::
 
-   #service ows-server start
-   or
-   #service ows-server stop
-   or
-   #service ows-server restart
-   or, to check if eveything is running and ok
-   service ows-server status
-  ● ows-server.service - OWS Web Application Server
-     Loaded: loaded (/etc/systemd/system/ows-server.service; disabled; vendor preset: enabled)
-     Active: active (running) since Thu 2025-08-07 16:54:32 CEST; 3 days ago
-   Main PID: 13226 (python3)
-      Tasks: 8 (limit: 152995)
-     Memory: 79.1M
-     CGroup: /system.slice/ows-server.service
-             └─13226 /usr/bin/python3 ows_serverv2.py
+      #service ows-server start
+      or
+      #service ows-server stop
+      or
+      #service ows-server restart
+      or, to check if eveything is running and ok
+      service ows-server status
+      ● ows-server.service - OWS Web Application Server
+      	Loaded: loaded (/etc/systemd/system/ows-server.service; disabled; vendor preset: enabled)
+     	Active: active (running) since Thu 2025-08-07 16:54:32 CEST; 3 days ago
+   	Main PID: 13226 (python3)
+      	Tasks: 8 (limit: 152995)
+     	Memory: 79.1M
+     	CGroup: /system.slice/ows-server.service
+                └─13226 /usr/bin/python3 ows_serverv2.py
 
-The generated output can also show up when you ask the **status** of the service::
+The generated output can also show up when you ask the **status** of the service ::
 
-  Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,250 - ows-server - DEBUG - Standard Output: csvA -> /home/ubuntu/ows-server//uploads/simple.csv
-  Aug 07 16:55:10 ows-server python3[13226]: csvB -> /home/ubuntu/ows-server//uploads/simple2.csv
-  Aug 07 16:55:10 ows-server python3[13226]: csvM -> /home/ubuntu/ows-server//out/Brecht_20250807145505.csv
-  Aug 07 16:55:10 ows-server python3[13226]: merging 2 csv files
-  Aug 07 16:55:10 ows-server python3[13226]: ['1', 'simpel test', '145']
-  Aug 07 16:55:10 ows-server python3[13226]: ['2', 'simple hallo', '909']
-  Aug 07 16:55:10 ows-server python3[13226]: ['11', 'simpel 2 test', '1450']
-  Aug 07 16:55:10 ows-server python3[13226]: ['12', 'simple 2 hallo', '7895']
-  Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,251 - ows-server - DEBUG - Standard Error:
-  Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,257 - ows-server - DEBUG - nothing to remove
-
+    Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,250 - ows-server - DEBUG - Standard Output: csvA -> /home/ubuntu/ows-server//uploads/simple.csv
+    Aug 07 16:55:10 ows-server python3[13226]: csvB -> /home/ubuntu/ows-server//uploads/simple2.csv
+    Aug 07 16:55:10 ows-server python3[13226]: csvM -> /home/ubuntu/ows-server//out/Brecht_20250807145505.csv
+    Aug 07 16:55:10 ows-server python3[13226]: merging 2 csv files
+    Aug 07 16:55:10 ows-server python3[13226]: ['1', 'simpel test', '145']
+    Aug 07 16:55:10 ows-server python3[13226]: ['2', 'simple hallo', '909']
+    Aug 07 16:55:10 ows-server python3[13226]: ['11', 'simpel 2 test', '1450']
+    Aug 07 16:55:10 ows-server python3[13226]: ['12', 'simple 2 hallo', '7895']
+    Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,251 - ows-server - DEBUG - Standard Error:
+    Aug 07 16:55:10 ows-server python3[13226]: 2025-08-07 14:55:10,257 - ows-server - DEBUG - nothing to remove	
+	
 
 requirements of python script to be executed
 ============================================
 The name of the script is specified in the section **[scripts]** in the ows.ini file. The script should provide 3 positional parameters, where the first two are the files to be compared , and the last is the name of the output file. Have a look at the test-scripts provided in de **tests** subdirectory, like **merge_csvs_pandas.py** ::
 
-   >python merge_csvs_pandas_args.py
-   usage: merge_csvs_pandas_args.py [-h] csvA csvB csvM
-   merge_csvs_pandas_args.py: error: the following arguments are required: csvA, csvB, csvM
+    >python merge_csvs_pandas_args.py
+    usage: merge_csvs_pandas_args.py [-h] csvA csvB csvM
+    merge_csvs_pandas_args.py: error: the following arguments are required: csvA, csvB, csvM
 
 So csvA and csvB are the 2 files to be compared, csvM can is the merged csv file (output file). You can also provide an extra parameter **--verbose**, which can log extra debugging information.
