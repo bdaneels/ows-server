@@ -10,7 +10,7 @@ Requirements
 
 Configuration
 =============
-**ows.ini.j2** is an ini configuration file, which will be converted to **ows.ini** via a Makefile. Path specific parameters and some others will be different based on where the service is running (**server** or **home**). We will explain each section herafter.
+**ows.ini.j2** is an ini configuration file, which will be converted to **ows.ini** via a Makefile. Path specific parameters and some others will be different based on where the service is running (**server** or **home**). We will explain each section hereafter.
 
 paths
 -----
@@ -22,7 +22,7 @@ general
 
 uploader
 --------
-This is the file uploader used by **NiceGUI**. You can soecify the **max_file_size** allowed for uploads (e.g. 1 * MB or 10 * MB, or KB or  GB). The value will be safely evaluated at runtime. You can also specify a label that appears at the top of the file uploader , **label**
+This is the file uploader used by **NiceGUI**. You can specify the **max_file_size** allowed for uploads (e.g. 1 * MB or 10 * MB, or KB or  GB). The value will be safely evaluated at runtime. You can also specify a label that appears at the top of the file uploader , **label**
 
 scripts
 -------
