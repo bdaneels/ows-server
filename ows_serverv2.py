@@ -83,6 +83,16 @@ def handle_upload(e: events.UploadEventArguments):
     else:
         ui.notify(f'filetype {ftype} not allowed for upload')
 
+def get_uploader_config(script_name):
+    """Haal uploader configuratie op voor een specifiek script, of de default."""
+    section_name = f'uploader_{script_name}'
+    if section_name in settings:
+        return settings[section_name], section_name
+    return settings['uploader'], 'uploader'
+
+def is_multi_field_uploader(config_section):
+    """Check of de uploader meerdere specifieke velden heeft."""
+    return 'upload_1_name' in settings[config_section]
 
 def get_files_dir(adir):    
     with os.scandir(adir) as it:
@@ -140,71 +150,152 @@ def page_sel_script():
     
 @ui.page('/upl_files')
 def page_upl_files():
+    script_name = app.storage.user.get('script', '')
+    uploader_config, config_section = get_uploader_config(script_name)
+    
+    # Check of dit een multi-field uploader is
+    if is_multi_field_uploader(config_section):
+        # Specifieke upload pagina voor scripts met benoemde velden
+        render_multi_field_upload(script_name, config_section)
+    else:
+        # Standaard upload pagina
+        render_standard_upload(script_name, config_section)
+
+def render_multi_field_upload(script_name, config_section):
+    """Render upload pagina met specifieke benoemde upload velden."""
+    config = settings[config_section]
+    uploaded_files = {}
+    
+    def handle_specific_upload(e: events.UploadEventArguments, field_name: str):
+        handle_upload(e)
+        uploaded_files[field_name] = e.name
+        log.debug(f'Uploaded {field_name}: {e.name}')
+        check_all_uploaded()
+    
+    def check_all_uploaded():
+        # Tel hoeveel upload velden er zijn
+        field_count = 1
+        while f'upload_{field_count}_name' in config:
+            field_count += 1
+        field_count -= 1
+        
+        if len(uploaded_files) == field_count:
+            next_btn.enable()
+        else:
+            next_btn.disable()
+    
+    def file_rejected(e):
+        ui.notify(f'Bestand is geweigerd (te groot)')
+    
+    def go_to_run():
+        # Sla de bestanden op in de juiste volgorde
+        files = []
+        field_names = []
+        i = 1
+        while f'upload_{i}_name' in config:
+            field_name = config[f'upload_{i}_name']
+            field_names.append(field_name)
+            if field_name in uploaded_files:
+                files.append(uploaded_files[field_name])
+            i += 1
+        
+        app.storage.user['files'] = files
+        app.storage.user['file_names'] = field_names
+        ui.navigate.to('/run_script')
+    
+    # UI
+    create_header()
+    ui.label(f'Script: {script_name}').classes('text-xl font-bold')
+    
+    max_size = safe_eval(config.get('max_file_size', '1048576'))
+    
+    # Maak upload velden aan voor elk benoemd veld
+    i = 1
+    while f'upload_{i}_name' in config:
+        field_name = config[f'upload_{i}_name']
+        field_label = config.get(f'upload_{i}_label', f'Upload bestand {i}')
+        
+        with ui.card().classes('w-full'):
+            ui.label(field_label).classes('font-semibold')
+            # Gebruik een closure om de juiste field_name te capturen
+            ui.upload(
+                on_upload=lambda e, fn=field_name: handle_specific_upload(e, fn),
+                max_file_size=max_size,
+                max_files=1,
+                on_rejected=file_rejected,
+                multiple=False
+            ).props('accept=*').classes('max-w-full')
+        i += 1
+    
+    next_btn = ui.button('Volgende', on_click=go_to_run)
+    next_btn.disable()
+
+def render_standard_upload(script_name, config_section):
+    """Render standaard upload pagina met file selectie grid."""
+    config = settings[config_section]
+    
     columns = [
         {'field': 'filename', 'checkboxSelection': True,
          'editable': False, 'sortable': True},
-        {'field': 'size', 'editable': False, 'sortable' : True},
+        {'field': 'size', 'editable': False, 'sortable': True},
     ]
-    
-    rows = [
-    ]
+    rows = []
     
     def update_aggrid():
-        grid_line = {}
         upload_dir = settings['paths']['upload']
         if not os.path.exists(upload_dir):
             ui.notify(f'specified upload dir {upload_dir} does not exist!')
             return
         rows.clear()
         for fentry, fstat in get_files_dir(upload_dir):
-            grid_line = {'filename':fentry.name, 'size':fstat.st_size}
-            #print(f"{grid_line}")
+            grid_line = {'filename': fentry.name, 'size': fstat.st_size}
             rows.append(grid_line)
         aggrid.update()
 
     async def get_selected_rows():
-        #log.debug('in get_selected_rows')
         files = []
         sel_rows = await aggrid.get_selected_rows()
-        if len(sel_rows) == 2:
+        max_files = int(config.get('max_files', 2))
+        if len(sel_rows) == max_files:
             for row in sel_rows:
-                ui.notify(f"{row['filename']}")                
+                ui.notify(f"{row['filename']}")
                 files.append(row['filename'])
             app.storage.user['files'] = files
             ui.navigate.to('/run_script')
         elif len(sel_rows) == 0:
             ui.notify('No rows selected.')
         else:
-            ui.notify('you must select 2 files')
-            
+            ui.notify(f'Je moet {max_files} bestanden selecteren')
+
     def file_upload(e):
         handle_upload(e)
 
-    def file_rejected(e):        
+    def file_rejected(e):
         ui.notify(f'file has been rejected (size)')
 
-    #UI
-    bytes = safe_eval(settings['uploader']['max_file_size'])
+    # UI
+    bytes = safe_eval(config['max_file_size'])
     create_header()
     log.debug(f"max_file_size for uploads-> {bytes} bytes")
-    ui.label(f"{app.storage.user['script']}")        
-    ui.upload(on_upload=file_upload,
-              max_file_size = safe_eval(settings['uploader']['max_file_size']),
-              max_files = settings['uploader']['max_files'],
-              label = settings['uploader']['label'],
-              on_multi_upload = update_aggrid,
-              on_rejected = file_rejected,
-              multiple= True).props('accept=*').classes('max-w-full')
+    ui.label(f"{script_name}")
+    ui.upload(
+        on_upload=file_upload,
+        max_file_size=safe_eval(config['max_file_size']),
+        max_files=int(config.get('max_files', 2)),
+        label=config.get('label', 'Upload bestanden'),
+        on_multi_upload=update_aggrid,
+        on_rejected=file_rejected,
+        multiple=True
+    ).props('accept=*').classes('max-w-full')
 
     with ui.card():
-        ui.label('Select the 2 files you want to compare')
+        ui.label(f"Selecteer {config.get('max_files', 2)} bestanden")
         aggrid = ui.aggrid({
             'columnDefs': columns,
             'rowData': rows,
-            'rowSelection': 'multiple',       
+            'rowSelection': 'multiple',
         })
-    btn = ui.button('Next',on_click=get_selected_rows)
-    #btn.enabled = False
+    btn = ui.button('Next', on_click=get_selected_rows)
     update_aggrid()
 
 @ui.page('/dwl_files')
@@ -280,7 +371,7 @@ def page_run_script():
     async def start_script(script, fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         user =  app.storage.user['user']
-        fn_out = f'{user}_{timestamp}.csv'
+        fn_out = f'{user}_{timestamp}.xlsx'
         fp_out = add_output_path(fn_out)
 
         #check if all files exist

@@ -6,3 +6,5 @@ __pycache__/
 *~
 start_srv.sh
 ows.ini
+.venv/
+/test/
