@@ -14,6 +14,8 @@ import pprint
 from pprint import pformat
 from ows_logger import setup_logger
 import json
+from pathlib import Path
+from werkzeug.utils import secure_filename
 
 #read a file with configuration settings
 #settings are in compare_it.ini file
@@ -30,56 +32,87 @@ else:
 log = setup_logger("ows-server", debug=settings['general']['debug'])
 
 def safe_eval(expr):
-    allowed = {'__builtins__': None}
-    return eval(expr, allowed, {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3})
+    """Safely parse file size string (e.g. '1 * MB') without using eval."""
+    units = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3}
+    expr = expr.strip()
+
+    # Simple integer case
+    if expr.isdigit():
+        return int(expr)
+
+    # Handle "X * Unit" or "X Unit" or "XUnit"
+    parts = expr.split('*')
+    if len(parts) == 2:
+        val_str = parts[0].strip()
+        unit_str = parts[1].strip()
+        if val_str.isdigit() and unit_str in units:
+            return int(val_str) * units[unit_str]
+
+    # If not matching exact format "number * UNIT", try to find unit at end
+    for unit, multiplier in units.items():
+        if expr.endswith(unit):
+            try:
+                val = int(expr.replace(unit, '').replace('*', '').strip())
+                return val * multiplier
+            except ValueError:
+                pass
+
+    # Fallback/Error
+    log.error(f"Could not parse size expression: {expr}, defaulting to 1MB")
+    return 1024**2
 
 def add_script_path(fname):
-    script_dir = settings['paths']['script']
-    if not os.path.exists(script_dir):
+    script_dir = Path(settings['paths']['script'])
+    if not script_dir.exists():
         ui.notify(f'specified script dir {script_dir} does not exist!')
         return None
-    fname_wpath = os.path.join(script_dir, fname)
-    return fname_wpath
+    fname_wpath = script_dir / fname
+    return str(fname_wpath)
 
 def add_upload_path(fname):
-    upload_dir = settings['paths']['upload']
-    if not os.path.exists(upload_dir):
+    upload_dir = Path(settings['paths']['upload'])
+    if not upload_dir.exists():
         ui.notify(f'specified upload dir {upload_dir} does not exist!')
         return None
-    fname_wpath = os.path.join(upload_dir, fname)
-    if not os.path.exists(fname_wpath):
+    fname_wpath = upload_dir / fname
+    if not fname_wpath.exists():
         ui.notify(f'specified file {fname_wpath} does not exist!')
         return None
-    return fname_wpath
+    return str(fname_wpath)
 
 def add_output_path(fname):
-    output_dir = settings['paths']['out']
-    if not os.path.exists(output_dir):
+    output_dir = Path(settings['paths']['out'])
+    if not output_dir.exists():
         ui.notify(f'specified output dir {output_dir} does not exist!')
         return
-    fname_wpath = os.path.join(output_dir, fname)
-    return fname_wpath
+    fname_wpath = output_dir / fname
+    return str(fname_wpath)
 
 def handle_upload(e: events.UploadEventArguments):
     log.info('handle upload')
-    upload_dir = settings['paths']['upload']
-    if not os.path.exists(upload_dir):
+    upload_dir = Path(settings['paths']['upload'])
+    if not upload_dir.exists():
         ui.notify(f'specified upload dir {upload_dir} does not exist!')
         return
     #pprint.pp(e)
-    fname = e.name
+
+    # Sanitize filename
+    fname = secure_filename(e.name)
     ftype = e.type
     log.debug(f'uploaded file name -> {fname} type {ftype}')
+
+    file_path = upload_dir / fname
+
     #allow csv or xlsx files only
     if re.search('csv', ftype):
         text = e.content.read().decode('utf-8')
         #save the file
-        with open(f'{upload_dir}/{e.name}', 'w') as file:
+        with open(file_path, 'w') as file:
             file.write(text)
     elif re.search('officedocument', ftype):
         btext = e.content.read()
         #save the file
-        with open(f'{upload_dir}/{e.name}', 'wb') as file:
+        with open(file_path, 'wb') as file:
             file.write(btext)
     else:
         ui.notify(f'filetype {ftype} not allowed for upload')
@@ -95,9 +128,10 @@ def is_multi_field_uploader(config_section):
     """Check of de uploader meerdere specifieke velden heeft."""
     return 'upload_1_name' in settings[config_section]
 
-def get_files_dir(adir):    
-    with os.scandir(adir) as it:
-        for entry in it:
+def get_files_dir(adir):
+    adir_path = Path(adir)
+    if adir_path.exists():
+        for entry in adir_path.iterdir():
             if not entry.name.startswith('.') and entry.is_file():
                 #log.debug(entry.name)
                 fstat = entry.stat()
@@ -244,7 +278,7 @@ def render_standard_upload(script_name, config_section):
     
     def update_aggrid():
         upload_dir = settings['paths']['upload']
-        if not os.path.exists(upload_dir):
+        if not Path(upload_dir).exists():
             ui.notify(f'specified upload dir {upload_dir} does not exist!')
             return
         rows.clear()
@@ -313,7 +347,7 @@ def page_dwl_files():
     def update_aggrid():
         grid_line = {}
         out_dir = settings['paths']['out']
-        if not os.path.exists(out_dir):
+        if not Path(out_dir).exists():
             ui.notify(f'specified out dir {out_dir} does not exist!')
             return
         rows.clear()
@@ -365,7 +399,7 @@ def page_run_script():
             
     def get_check_path_script(script):
         fpath = settings['scripts'][script]
-        if not os.path.exists(fpath):
+        if not Path(fpath).exists():
             ui.notify(f'script full name {fpath}  not found!')
             return None
         return fpath
@@ -427,9 +461,9 @@ def page_run_script():
         
         if rem_compared_files.value:
             log.debug("removing compared files...")
-            if os.path.exists(fp_fileA):
+            if Path(fp_fileA).exists():
                 os.remove(fp_fileA)
-            if os.path.exists(fp_fileB):
+            if Path(fp_fileB).exists():
                 os.remove(fp_fileB)
         else:
             log.debug("nothing to remove")
