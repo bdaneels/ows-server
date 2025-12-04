@@ -471,7 +471,7 @@ def page_run_script():
         d.bind_enabled_from(cscript, 'button_enabled')
         
         # New: Script results expansion with AG Grid
-        with ui.expansion('Script resultaten', icon='warning').classes('w-full') as results_expansion:
+        with ui.expansion('Script resultaten', icon='warning').classes('w-full').props('default-opened') as results_expansion:
             summary_label = ui.label('Nog geen resultaten')
             warnings_columns = [
                 {'field': 'student_id', 'headerName': 'Student ID', 'sortable': True},
