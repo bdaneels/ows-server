@@ -13,6 +13,7 @@ import datetime
 import pprint
 from pprint import pformat
 from ows_logger import setup_logger
+import json
 
 #read a file with configuration settings
 #settings are in compare_it.ini file
@@ -360,6 +361,7 @@ def page_run_script():
         def __init__(self):
             self.fileOut = ''
             self.button_enabled = False
+            self.warnings = []
             
     def get_check_path_script(script):
         fpath = settings['scripts'][script]
@@ -367,33 +369,68 @@ def page_run_script():
             ui.notify(f'script full name {fpath}  not found!')
             return None
         return fpath
-        
+    
+    def parse_ui_output(stdout_text):
+        """Extract structured UI data from script output."""
+        try:
+            start_marker = "---UI_OUTPUT_START---"
+            end_marker = "---UI_OUTPUT_END---"
+            if start_marker in stdout_text and end_marker in stdout_text:
+                start = stdout_text.index(start_marker) + len(start_marker)
+                end = stdout_text.index(end_marker)
+                json_str = stdout_text[start:end].strip()
+                return json.loads(json_str)
+        except (json.JSONDecodeError, ValueError) as e:
+            log.error(f"Failed to parse UI output: {e}")
+        return None
+            
     async def start_script(script, fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         user =  app.storage.user['user']
         fn_out = f'{user}_{timestamp}.xlsx'
         fp_out = add_output_path(fn_out)
 
-        #check if all files exist
-        
         cmd = ['python3', f'{fp_script}', f'{fp_fileA}', f'{fp_fileB}', f'{fp_out}']
         if settings['general']['debug']:
             cmd += ['--verbose']
         log.debug(f"command -> {cmd}")
         cmd_lbl.text = f"{cmd}"
         spinner.set_visibility(True)
+        checkmark.visible = False
         stdout, stderr = await run_subprocess(cmd)
+        
+        stdout_text = stdout.decode()
+        stderr_text = stderr.decode()
+        
         cscript.fileOut = fp_out
         cscript.button_enabled = True
         spinner.set_visibility(False)
-        log.debug(f'Standard Output: {stdout.decode()}')
-        log.debug(f'Standard Error: {stderr.decode()}')
-        out.content = f'```\n{stdout.decode()}\n```'
-        error.content = f'```\n{stderr.decode()}\n```'
+        checkmark.visible = True
+        
+        log.debug(f'Standard Output: {stdout_text}')
+        log.debug(f'Standard Error: {stderr_text}')
+        
+        # Parse structured output for UI
+        ui_data = parse_ui_output(stdout_text)
+        if ui_data and 'warnings' in ui_data:
+            cscript.warnings = ui_data['warnings']
+            warnings_grid.options['rowData'] = ui_data['warnings']
+            warnings_grid.update()
+            results_expansion.open()
+            
+            # Show summary if available
+            if 'summary' in ui_data:
+                summary_label.text = f"Totaal: {ui_data['summary'].get('total_warnings', 0)} waarschuwingen"
+        
+        out.content = f'```\n{stdout_text}\n```'
+        error.content = f'```\n{stderr_text}\n```'
+        
         if rem_compared_files.value:
             log.debug("removing compared files...")
-            os.remove(fp_fileA)
-            os.remove(fp_fileB)
+            if os.path.exists(fp_fileA):
+                os.remove(fp_fileA)
+            if os.path.exists(fp_fileB):
+                os.remove(fp_fileB)
         else:
             log.debug("nothing to remove")
             
@@ -408,31 +445,54 @@ def page_run_script():
     fileB =  app.storage.user['files'][1]
     #here we get the real script name, and check if it exists
     fp_script = get_check_path_script(script)
-    ui.label(f'script -> {fp_script}')
     #and we add paths to the selected files
     fp_fileA =  add_upload_path(fileA)
-    ui.label(f'fp_file 1 -> {fp_fileA}')
     fp_fileB = add_upload_path(fileB)
-    ui.label(f'fp_file 2 -> {fp_fileB}')
-    ui.label().bind_text_from(cscript, 'fileOut',
-                              backward=lambda text: f'output file -> {text}')
-    cmd_lbl = ui.label()
-    #check if all files exist!
+    
+    with ui.expansion('File details', icon='info').classes('w-full') as details:
+        ui.label(f'script -> {fp_script}')
+        ui.label(f'fp_file 1 -> {fp_fileA}')
+        ui.label(f'fp_file 2 -> {fp_fileB}')
+        ui.label().bind_text_from(cscript, 'fileOut',
+                                  backward=lambda text: f'output file -> {text}')
+        cmd_lbl = ui.label()
+    
+ #check if all files exist!
     if fp_script and fp_fileA and fp_fileB:
         rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
         rem_compared_files.value = True
         ui.button('Start script', on_click=lambda e: \
                   start_script(script, fp_script, fp_fileA, fp_fileB))
-        spinner = ui.spinner(size='lg') # .classes('absolute-center')
+        spinner = ui.spinner(size='lg')
         spinner.visible = False
+        checkmark = ui.icon('check_circle', size='lg').classes('text-green-500')
+        checkmark.visible = False
         d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
         d.bind_enabled_from(cscript, 'button_enabled')
-        ui.label('stderr')
-        with ui.card() as err_card:       
-            error = ui.markdown()
-        ui.label('stdout')
-        with ui.card() as out_card:
-            out = ui.markdown()
+        
+        # New: Script results expansion with AG Grid
+        with ui.expansion('Script resultaten', icon='warning').classes('w-full') as results_expansion:
+            summary_label = ui.label('Nog geen resultaten')
+            warnings_columns = [
+                {'field': 'student_id', 'headerName': 'Student ID', 'sortable': True},
+                {'field': 'voornaam', 'headerName': 'Voornaam', 'sortable': True},
+                {'field': 'achternaam', 'headerName': 'Achternaam', 'sortable': True},
+                {'field': 'email', 'headerName': 'Email', 'sortable': True},
+                {'field': 'waarschuwing', 'headerName': 'Waarschuwing', 'sortable': True, 'flex': 2},
+            ]
+            warnings_grid = ui.aggrid({
+                'columnDefs': warnings_columns,
+                'rowData': [],
+                'domLayout': 'autoHeight',
+            }).classes('w-full')
+        
+        with ui.expansion('Terminal output', icon='terminal').classes('w-full'):
+            ui.label('stderr')
+            with ui.card() as err_card:       
+                error = ui.markdown()
+            ui.label('stdout')
+            with ui.card() as out_card:
+                out = ui.markdown()
     else:
         ui.notify('one of the specified files does not exist. Cannot continue!')
         ui.label('one of the specified files does not exist. Cannot continue!')
