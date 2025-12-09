@@ -1,0 +1,42 @@
+{
+  "predelib_file": "db.xlsx",
+  "dashboard_file": "dashboard_inschrijvingen.xlsx",
+  "predelib_records": 1414,
+  "dashboard_records": 139,
+  "students_with_fail_count": 1,
+  "students_with_fail": [
+    {
+      "ID": "20250706",
+      "Achternaam": "Paraschivescu",
+      "Voornaam": "Radu",
+      "E-mail": "radu.paraschivescu@student.uantwerpen.be",
+      "Totaal_aantal_SP": 39,
+      "Aantal_SP_vereist": 60,
+      "Waarschuwing": "ONTBREKENDE PUNTEN! / Aantal SP vereist!",
+      "Adviesrapport_code": "FAIL"
+    }
+  ],
+  "students_with_mismatching_SP_values_predelib_count": 1,
+  "students_with_mismatching_SP_values_predelib": [
+    {
+      "ID": "20250706",
+      "Achternaam": "Paraschivescu",
+      "Voornaam": "Radu",
+      "E-mail": "radu.paraschivescu@student.uantwerpen.be",
+      "Totaal_aantal_SP": 39,
+      "Aantal_SP_vereist": 60,
+      "Waarschuwing": "ONTBREKENDE PUNTEN! / Aantal SP vereist!",
+      "Adviesrapport_code": "FAIL"
+    }
+  ],
+  "mismatches_count": 1,
+  "mismatches": [
+    {
+      "ID": "20250706",
+      "Name": "Radu Paraschivescu",
+      "Predelib_SP": 39,
+      "Dashboard_SP": 45
+    }
+  ],
+  "status": "completed"
+}
