@@ -4,7 +4,7 @@
 # first get the current directory (where this file is)
 
 current_dir := $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
-MODE_DEBUG := ""
+MODE_DEBUG := 
 MODE_OPER := > /dev/null 2>&1
 DIRS=uploads scripts/tst out
 UPLOAD_DIR := uploads
@@ -29,14 +29,15 @@ dirs:
 	mkdir -p $(DIRS)
 
 ini:
-	jinja  -D cwd "$(current_dir)" -D debug "$(DEBUG)" -o ows.ini ows.ini.j2
+	sed -e "s|{{ cwd }}|$(current_dir)|g" -e "s/{{ debug }}/$(DEBUG)/g" \
+	ows.ini.j2 > ows.ini
 
 deb:
-	jinja  -D mode "$(MODE_DEBUG)" -o start_srv.sh start_srv.sh.j2
+	sed -e "s|{{ mode }}|$(MODE_DEBUG)|g" start_srv.sh.j2 > start_srv.sh
 	chmod +x start_srv.sh
 
 opr:
-	jinja  -D mode "$(MODE_OPER)" -o start_srv.sh start_srv.sh.j2
+	sed -e "s|{{ mode }}|$(MODE_OPER)|g" start_srv.sh.j2 >start_srv.sh
 	chmod +x start_srv.sh
 tests:
 	cp test/merge_csvs.py scripts/tst/
