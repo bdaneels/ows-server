@@ -19,12 +19,19 @@ max_file_size = 1 * MB #you can specify KB, MB or GB
 max_files = 2
 label = Upload 2 files you want to compare
 
+[uploader_startpakketten]
+max_file_size = 1 * MB
+upload_1_label = Upload het predeliberatie bestand. Rechtstreekse export uit Sisa
+upload_1_name = prediberatie
+upload_2_label = Upload het Dasbhoard inschrijvingen bestand. Rechtstreekse export uit Sisa
+upload_2_name = dashboard_inschrijvingen
+
 [scripts]
 startpakketten = ${paths:script}/production/startpakketten/script.py
 
 
 [comment]
 
-startpakketten = 2 xlsx worden vergeleken
+startpakketten = Deze functie controleert de startpakketten van studenten in drempelteller 1 met de inschrijvingen in drempelteller in uit het Dasbhoard Inschrijvingen.
 
 
