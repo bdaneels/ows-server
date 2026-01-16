@@ -16,6 +16,7 @@ from ows_logger import setup_logger
 import json
 from pathlib import Path
 from werkzeug.utils import secure_filename
+from ows_utils import safe_eval, validate_path
 
 #read a file with configuration settings
 #settings are in compare_it.ini file
@@ -28,65 +29,24 @@ if os.path.exists('ows.ini'):
 else:
     print("no configuration file found (ows.ini)")
     exit
-    
+
 log = setup_logger("ows-server", debug=settings['general']['debug'])
 
-def safe_eval(expr):
-    """Safely parse file size string (e.g. '1 * MB') without using eval."""
-    units = {'KB': 1024, 'MB': 1024**2, 'GB': 1024**3}
-    expr = expr.strip()
-
-    # Simple integer case
-    if expr.isdigit():
-        return int(expr)
-
-    # Handle "X * Unit" or "X Unit" or "XUnit"
-    parts = expr.split('*')
-    if len(parts) == 2:
-        val_str = parts[0].strip()
-        unit_str = parts[1].strip()
-        if val_str.isdigit() and unit_str in units:
-            return int(val_str) * units[unit_str]
-
-    # If not matching exact format "number * UNIT", try to find unit at end
-    for unit, multiplier in units.items():
-        if expr.endswith(unit):
-            try:
-                val = int(expr.replace(unit, '').replace('*', '').strip())
-                return val * multiplier
-            except ValueError:
-                pass
-
-    # Fallback/Error
-    log.error(f"Could not parse size expression: {expr}, defaulting to 1MB")
-    return 1024**2
-
-def add_script_path(fname):
-    script_dir = Path(settings['paths']['script'])
-    if not script_dir.exists():
-        ui.notify(f'specified script dir {script_dir} does not exist!')
-        return None
-    fname_wpath = script_dir / fname
-    return str(fname_wpath)
-
 def add_upload_path(fname):
-    upload_dir = Path(settings['paths']['upload'])
-    if not upload_dir.exists():
-        ui.notify(f'specified upload dir {upload_dir} does not exist!')
+    upload_dir = settings['paths']['upload']
+    try:
+        return validate_path(upload_dir, fname, check_file_exists=True)
+    except FileNotFoundError as e:
+        ui.notify(str(e))
         return None
-    fname_wpath = upload_dir / fname
-    if not fname_wpath.exists():
-        ui.notify(f'specified file {fname_wpath} does not exist!')
-        return None
-    return str(fname_wpath)
 
 def add_output_path(fname):
-    output_dir = Path(settings['paths']['out'])
-    if not output_dir.exists():
-        ui.notify(f'specified output dir {output_dir} does not exist!')
-        return
-    fname_wpath = output_dir / fname
-    return str(fname_wpath)
+    output_dir = settings['paths']['out']
+    try:
+        return validate_path(output_dir, fname, check_file_exists=False)
+    except FileNotFoundError as e:
+        ui.notify(str(e))
+        return None
 
 def handle_upload(e: events.UploadEventArguments):
     log.info('handle upload')
@@ -148,7 +108,7 @@ async def run_subprocess(cmd):
 
     stdout, stderr = await process.communicate()
     return stdout, stderr
-                
+
 def create_header():
     menu_items = {'Home': '/',
                   'Select script': '/sel_script',
@@ -162,15 +122,15 @@ def create_header():
         with ui.row().classes('max-[1050px]:hidden'):
             for title_, target in menu_items.items():
                 ui.link(title_, target).classes(replace='text-lg text-white')
-                
+
 @ui.page('/sel_script')
 def page_sel_script():
 
     def save_and_next(key):
         app.storage.user['script'] = key
         ui.navigate.to('/upl_files')
-  
-    #UI         
+
+    #UI
     create_header()
     for key in settings['scripts']:
         with ui.card():
@@ -178,16 +138,16 @@ def page_sel_script():
                 text = settings.get('comment', key)
                 ui.markdown(f"{text}")
             #be carefull here, assign the variable link to an argument, otherwise
-            #the link value will be the last value it has after the loop 
+            #the link value will be the last value it has after the loop
             ui.button(f'{key}', on_click=lambda key=key: save_and_next(key))
-        
 
-    
+
+
 @ui.page('/upl_files')
 def page_upl_files():
     script_name = app.storage.user.get('script', '')
     uploader_config, config_section = get_uploader_config(script_name)
-    
+
     # Check of dit een multi-field uploader is
     if is_multi_field_uploader(config_section):
         # Specifieke upload pagina voor scripts met benoemde velden
@@ -200,28 +160,28 @@ def render_multi_field_upload(script_name, config_section):
     """Render upload pagina met specifieke benoemde upload velden."""
     config = settings[config_section]
     uploaded_files = {}
-    
+
     def handle_specific_upload(e: events.UploadEventArguments, field_name: str):
         handle_upload(e)
         uploaded_files[field_name] = e.name
         log.debug(f'Uploaded {field_name}: {e.name}')
         check_all_uploaded()
-    
+
     def check_all_uploaded():
         # Tel hoeveel upload velden er zijn
         field_count = 1
         while f'upload_{field_count}_name' in config:
             field_count += 1
         field_count -= 1
-        
+
         if len(uploaded_files) == field_count:
             next_btn.enable()
         else:
             next_btn.disable()
-    
+
     def file_rejected(e):
         ui.notify(f'Bestand is geweigerd (te groot)')
-    
+
     def go_to_run():
         # Sla de bestanden op in de juiste volgorde
         files = []
@@ -233,23 +193,23 @@ def render_multi_field_upload(script_name, config_section):
             if field_name in uploaded_files:
                 files.append(uploaded_files[field_name])
             i += 1
-        
+
         app.storage.user['files'] = files
         app.storage.user['file_names'] = field_names
         ui.navigate.to('/run_script')
-    
+
     # UI
     create_header()
     ui.label(f'Script: {script_name}').classes('text-xl font-bold')
-    
+
     max_size = safe_eval(config.get('max_file_size', '1048576'))
-    
+
     # Maak upload velden aan voor elk benoemd veld
     i = 1
     while f'upload_{i}_name' in config:
         field_name = config[f'upload_{i}_name']
         field_label = config.get(f'upload_{i}_label', f'Upload bestand {i}')
-        
+
         with ui.card().classes('w-full'):
             ui.label(field_label).classes('font-semibold')
             # Gebruik een closure om de juiste field_name te capturen
@@ -261,21 +221,21 @@ def render_multi_field_upload(script_name, config_section):
                 multiple=False
             ).props('accept=*').classes('max-w-full')
         i += 1
-    
+
     next_btn = ui.button('Volgende', on_click=go_to_run)
     next_btn.disable()
 
 def render_standard_upload(script_name, config_section):
     """Render standaard upload pagina met file selectie grid."""
     config = settings[config_section]
-    
+
     columns = [
         {'field': 'filename', 'checkboxSelection': True,
          'editable': False, 'sortable': True},
         {'field': 'size', 'editable': False, 'sortable': True},
     ]
     rows = []
-    
+
     def update_aggrid():
         upload_dir = settings['paths']['upload']
         if not Path(upload_dir).exists():
@@ -340,10 +300,10 @@ def page_dwl_files():
          'editable': False, 'sortable': True},
         {'field': 'size', 'editable': False, 'sortable' : True},
     ]
-    
+
     rows = [
     ]
-    
+
     def update_aggrid():
         grid_line = {}
         out_dir = settings['paths']['out']
@@ -358,7 +318,7 @@ def page_dwl_files():
         aggrid.update()
 
     async def get_selected_rows(e):
-        #pprint.pp(e.sender.text)        
+        #pprint.pp(e.sender.text)
         files = []
         sel_rows = await aggrid.get_selected_rows()
         if len(sel_rows) > 0:
@@ -372,22 +332,22 @@ def page_dwl_files():
             update_aggrid()
         elif len(sel_rows) == 0:
             ui.notify('No rows selected.')
-                
+
     #UI
-    create_header()            
+    create_header()
     ui.button('Select all', on_click=lambda: aggrid.run_grid_method('selectAll'))
     with ui.card():
         ui.label('Select the files you want to download or delete')
         aggrid = ui.aggrid({
             'columnDefs': columns,
             'rowData': rows,
-            'rowSelection': 'multiple',       
+            'rowSelection': 'multiple',
         })
     ui.button(settings['general']['download_lbl'], on_click=get_selected_rows)
     ui.button(settings['general']['delete_lbl'], on_click=get_selected_rows)
     update_aggrid()
 
-    
+
 @ui.page('/run_script')
 def page_run_script():
 
@@ -396,14 +356,14 @@ def page_run_script():
             self.fileOut = ''
             self.button_enabled = False
             self.warnings = []
-            
+
     def get_check_path_script(script):
         fpath = settings['scripts'][script]
         if not Path(fpath).exists():
             ui.notify(f'script full name {fpath}  not found!')
             return None
         return fpath
-    
+
     def parse_ui_output(stdout_text):
         """Extract structured UI data from script output."""
         try:
@@ -417,7 +377,7 @@ def page_run_script():
         except (json.JSONDecodeError, ValueError) as e:
             log.error(f"Failed to parse UI output: {e}")
         return None
-            
+
     async def start_script(script, fp_script, fp_fileA, fp_fileB):
         timestamp = datetime.datetime.now().strftime('%Y%m%d%H%M%S')
         user =  app.storage.user['user']
@@ -432,18 +392,18 @@ def page_run_script():
         spinner.set_visibility(True)
         checkmark.visible = False
         stdout, stderr = await run_subprocess(cmd)
-        
+
         stdout_text = stdout.decode()
         stderr_text = stderr.decode()
-        
+
         cscript.fileOut = fp_out
         cscript.button_enabled = True
         spinner.set_visibility(False)
         checkmark.visible = True
-        
+
         log.debug(f'Standard Output: {stdout_text}')
         log.debug(f'Standard Error: {stderr_text}')
-        
+
         # Parse structured output for UI
         ui_data = parse_ui_output(stdout_text)
         if ui_data and 'warnings' in ui_data:
@@ -451,14 +411,14 @@ def page_run_script():
             warnings_grid.options['rowData'] = ui_data['warnings']
             warnings_grid.update()
             results_expansion.open()
-            
+
             # Show summary if available
             if 'summary' in ui_data:
                 summary_label.text = f"Totaal: {ui_data['summary'].get('total_warnings', 0)} waarschuwingen"
-        
+
         out.content = f'```\n{stdout_text}\n```'
         error.content = f'```\n{stderr_text}\n```'
-        
+
         if rem_compared_files.value:
             log.debug("removing compared files...")
             if Path(fp_fileA).exists():
@@ -467,7 +427,7 @@ def page_run_script():
                 os.remove(fp_fileB)
         else:
             log.debug("nothing to remove")
-            
+
     #UI
     cscript = CScript()
     log.debug(f'{cscript.fileOut}')
@@ -482,7 +442,7 @@ def page_run_script():
     #and we add paths to the selected files
     fp_fileA =  add_upload_path(fileA)
     fp_fileB = add_upload_path(fileB)
-    
+
     with ui.expansion('File details', icon='info').classes('w-full') as details:
         ui.label(f'script -> {fp_script}')
         ui.label(f'fp_file 1 -> {fp_fileA}')
@@ -490,7 +450,7 @@ def page_run_script():
         ui.label().bind_text_from(cscript, 'fileOut',
                                   backward=lambda text: f'output file -> {text}')
         cmd_lbl = ui.label()
-    
+
  #check if all files exist!
     if fp_script and fp_fileA and fp_fileB:
         rem_compared_files = ui.checkbox('remove 2 files (xlsx) after processing')
@@ -503,7 +463,7 @@ def page_run_script():
         checkmark.visible = False
         d = ui.button('Download', on_click=lambda: ui.download.file(f'{cscript.fileOut}'))
         d.bind_enabled_from(cscript, 'button_enabled')
-        
+
         # New: Script results expansion with AG Grid
         with ui.expansion('Script resultaten', icon='warning').classes('w-full').props('default-opened') as results_expansion:
             summary_label = ui.label('Nog geen resultaten')
@@ -519,10 +479,10 @@ def page_run_script():
                 'rowData': [],
                 'domLayout': 'autoHeight',
             }).classes('w-full')
-        
+
         with ui.expansion('Terminal output', icon='terminal').classes('w-full'):
             ui.label('stderr')
-            with ui.card() as err_card:       
+            with ui.card() as err_card:
                 error = ui.markdown()
             ui.label('stdout')
             with ui.card() as out_card:
@@ -535,7 +495,7 @@ def page_run_script():
 def store_user(value):
     ui.notify(f'saving user {value}')
     app.storage.user['user'] = value
-        
+
 @ui.page('/')
 def page_index():
     user = None
@@ -559,5 +519,4 @@ if sock_hostname == hostname:
     ui.run(reload=False, host='0.0.0.0', storage_secret=settings['general']['storage_secret'])
 else:
     log.debug("running locally...")
-    ui.run(storage_secret=settings['general']['storage_secret'])    
-
+    ui.run(storage_secret=settings['general']['storage_secret'])
